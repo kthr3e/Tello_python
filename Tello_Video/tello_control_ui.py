@@ -1,3 +1,4 @@
+# coding:utf-8
 from PIL import Image
 from PIL import ImageTk
 import Tkinter as tki
@@ -20,21 +21,21 @@ class TelloUI:
 
         Raises:
             RuntimeError: If the Tello rejects the attempt to enter command mode.
-        """        
+        """
 
         self.tello = tello # videostream device
-        self.outputPath = outputpath # the path that save pictures created by clicking the takeSnapshot button 
-        self.frame = None  # frame read from h264decoder and used for pose recognition 
+        self.outputPath = outputpath # the path that save pictures created by clicking the takeSnapshot button
+        self.frame = None  # frame read from h264decoder and used for pose recognition
         self.thread = None # thread of the Tkinter mainloop
-        self.stopEvent = None  
-        
+        self.stopEvent = None
+
         # control variables
         self.distance = 0.1  # default distance for 'move' cmd
         self.degree = 30  # default degree for 'cw' or 'ccw' cmd
 
         # if the flag is TRUE,the auto-takeoff thread will stop waiting for the response from tello
         self.quit_waiting_flag = False
-        
+
         # initialize the root window and image panel
         self.root = tki.Tk()
         self.panel = None
@@ -53,7 +54,7 @@ class TelloUI:
             self.root, text="Open Command Panel", relief="raised", command=self.openCmdWindow)
         self.btn_landing.pack(side="bottom", fill="both",
                               expand="yes", padx=10, pady=5)
-        
+
         # start a thread that constantly pools the video sensor for
         # the most recently read frame
         self.stopEvent = threading.Event()
@@ -67,75 +68,76 @@ class TelloUI:
         # the sending_command will send command to tello every 5 seconds
         self.sending_command_thread = threading.Thread(target = self._sendingCommand)
     def videoLoop(self):
-        """
-        The mainloop thread of Tkinter 
-        Raises:
-            RuntimeError: To get around a RunTime error that Tkinter throws due to threading.
-        """
-        try:
-            # start the thread that get GUI image and drwa skeleton 
-            time.sleep(0.5)
-            self.sending_command_thread.start()
-            while not self.stopEvent.is_set():                
-                system = platform.system()
+        #ビデオを取得するスレッド
+        #(原文は「Tkinterのメインループスレッド」だったけど，なんか違う．
 
-            # read the frame for GUI show
-                self.frame = self.tello.read()
-                if self.frame is None or self.frame.size == 0:
-                    continue 
-            
-            # transfer the format from frame to image         
+        try:   # ランタイムエラー(主にH.264のデコード失敗)を引っ掛けるためのtry except文
+
+            # 画像取得スレッドの開始
+            time.sleep(0.5)    # 0.5秒のウェイト（おそらくTelloとの通信の安定を待つ)
+            self.sending_command_thread.start()    # 5秒おきに'command'を送信するスレッドを開始
+                                                   # Telloは15秒間コマンドが来ないと自動着陸してしまうので．
+
+            while not self.stopEvent.is_set():    # スレッド終了命令を検知するまで永久ループ
+                system = platform.system()    # OSが何か調べる(Win?Mac?Linux?)
+
+                # GUIで表示するフレームの取得
+                self.frame = self.tello.read()    # Telloクラスで受信＆デコードした画像をここで読み取る
+                if self.frame is None or self.frame.size == 0:    # 画像データの中身が空(要はデータの取得失敗)だったら
+                    continue    # 無視してwhileループ先頭へ戻る
+
+                # フレームをTkinter用にPILイメージに変換する
                 image = Image.fromarray(self.frame)
 
-            # we found compatibility problem between Tkinter,PIL and Macos,and it will 
-            # sometimes result the very long preriod of the "ImageTk.PhotoImage" function,
-            # so for Macos,we start a new thread to execute the _updateGUIImage function.
-                if system =="Windows" or system =="Linux":                
-                    self._updateGUIImage(image)
+                # Mac OSではTkinterのImageTK.PhotoImage関数の処理に非常に長い時間がかかる問題があったため，
+                # Mac OSの場合は_updateGUIImage関数を別スレッドとして実行する様にしました
+                if system =="Windows" or system =="Linux":    # WindowsとLinuxでは普通に関数を呼ぶ
+                    self._updateGUIImage(image)    # imageをGUIウィンドウのパネルに描画する
 
-                else:
-                    thread_tmp = threading.Thread(target=self._updateGUIImage,args=(image,))
-                    thread_tmp.start()
-                    time.sleep(0.03)                                                            
-        except RuntimeError, e:
-            print("[INFO] caught a RuntimeError")
+                else:    # Macではスレッドとして呼ぶ
+                    thread_tmp = threading.Thread(target=self._updateGUIImage,args=(image,))    # スレッド作成
+                    thread_tmp.start()    # スレッド開始
+                    time.sleep(0.01)    # 1フレーム分(30FPS)の待ち時間
 
-           
+        except RuntimeError, e:    # ランタイムエラーを検知したら
+            print("[INFO] caught a RuntimeError")    # エラーメッセージを表示
+
+    # ウィンドウの映像を更新(videoLoopから呼ばれる)
     def _updateGUIImage(self,image):
         """
-        Main operation to initial the object of image,and update the GUI panel 
-        """  
+        imageオブジェクトの初期化と，GUIのパネルの更新する
+        """
         image = ImageTk.PhotoImage(image)
-        # if the panel none ,we need to initial it
+        # パネルがなければ，初期化をする必要がある
         if self.panel is None:
             self.panel = tki.Label(image=image)
             self.panel.image = image
             self.panel.pack(side="left", padx=10, pady=10)
-        # otherwise, simply update the panel
+        # そうでなければ，単純にパネルを更新する
         else:
             self.panel.configure(image=image)
             self.panel.image = image
 
-            
+
     def _sendingCommand(self):
         """
         start a while loop that sends 'command' to tello every 5 second
-        """    
+        """
 
         while True:
-            self.tello.send_command('command')        
+            self.tello.send_command('command')
             time.sleep(5)
 
-    def _setQuitWaitingFlag(self):  
+    def _setQuitWaitingFlag(self):
         """
-        set the variable as TRUE,it will stop computer waiting for response from tello  
-        """       
-        self.quit_waiting_flag = True        
-   
+        set the variable as TRUE,it will stop computer waiting for response from tello
+        """
+        self.quit_waiting_flag = True
+
     def openCmdWindow(self):
         """
         open the cmd window and initial all the button and text
-        """        
+        """
         panel = Toplevel(self.root)
         panel.wm_title("Command Panel")
 
@@ -206,7 +208,7 @@ class TelloUI:
         """
         open the flip window and initial all the button and text
         """
-        
+
         panel = Toplevel(self.root)
         panel.wm_title("Gesture Recognition")
 
@@ -229,7 +231,7 @@ class TelloUI:
             panel, text="Flip Backward", relief="raised", command=self.telloFlip_b)
         self.btn_flipb.pack(side="bottom", fill="both",
                             expand="yes", padx=10, pady=5)
-       
+
     def takeSnapshot(self):
         """
         save the current frame of the video as a jpg file and put it into outputpath
@@ -258,7 +260,7 @@ class TelloUI:
             self.tello.video_freeze(True)
 
     def telloTakeOff(self):
-        return self.tello.takeoff()                
+        return self.tello.takeoff()
 
     def telloLanding(self):
         return self.tello.land()
@@ -350,11 +352,10 @@ class TelloUI:
     def onClose(self):
         """
         set the stop event, cleanup the camera, and allow the rest of
-        
+
         the quit process to continue
         """
         print("[INFO] closing...")
         self.stopEvent.set()
         del self.tello
         self.root.quit()
-

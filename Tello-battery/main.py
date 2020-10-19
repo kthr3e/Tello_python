@@ -7,13 +7,13 @@ import time	# time.sleepを使いたいので
 def main():
 
 	# Telloクラスを使って，droneというインスタンス(実体)を作る
-	drone = tello.Tello('', 8889) 
+	drone = tello.Tello('', 8889)
 
 	#Ctrl+cが押されるまでループ
 	try:
 		while True:
 			print( drone.get_battery() )	# バッテリー残量を問い合わせてプリント
-			time.sleep(0.3)	# 0.3s待つ
+			time.sleep(1.0)	# 1.0s待つ
 
 	except( KeyboardInterrupt, SystemExit):    # Ctrl+cが押されたら離脱
 		print( "SIGINTを検知" )

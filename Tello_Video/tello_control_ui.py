@@ -85,6 +85,8 @@ class TelloUI:
                 self.frame = self.tello.read()    # Telloクラスで受信＆デコードした画像をここで読み取る
                 if self.frame is None or self.frame.size == 0:    # 画像データの中身が空(要はデータの取得失敗)だったら
                     continue    # 無視してwhileループ先頭へ戻る
+                #ここで画像処理を行う。
+                
 
                 # フレームをTkinter用にPILイメージに変換する
                 image = Image.fromarray(self.frame)

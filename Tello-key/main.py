@@ -11,7 +11,7 @@ def main():
 	set_curses_term()
 
 	# Telloクラスを使って，droneというインスタンス(実体)を作る
-	drone = tello.Tello('', 8889) 
+	drone = tello.Tello('', 8889)
 
 	current_time = time.time()	# 現在時刻の保存変数
 	pre_time = current_time		# 5秒ごとの'command'送信のための時刻変数
@@ -48,8 +48,9 @@ def main():
 
 			# 5秒おきに'command'を送って、Telloが自動終了しないようにする
 			current_time = time.time()	# 現在時刻を取得
-			if current_time - pre_time > 5.0 :	# 前回時刻から5秒以上経過しているか？
+			if current_time - pre_time > 10.0 :	# 前回時刻から10秒以上経過しているか？
 				drone.send_command('command')	# 'command'送信
+				print( drone.get_battery() )    # 電池の残量を表示
 				pre_time = current_time			# 前回時刻を更新
 
 	except( KeyboardInterrupt, SystemExit):    # Ctrl+cが押されたら離脱

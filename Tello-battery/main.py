@@ -18,7 +18,7 @@ def main():
 	except( KeyboardInterrupt, SystemExit):    # Ctrl+cが押されたら離脱
 		print( "SIGINTを検知" )
 
-	# telloクラスを削除
+	# telloクラスを削除 メモリ解放のため
 	del drone
 
 

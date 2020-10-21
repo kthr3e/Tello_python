@@ -35,7 +35,80 @@ def main():
 			image = cv2.cvtColor(frame, cv2.COLOR_RGB2BGR)		# OpenCV用のカラー並びに変換する
 			small_image = cv2.resize(image, dsize=(960,720) )	# 画像サイズを半分に変更
 
-			cv_image = image
+			cv_image = small_image #ウィンドウの表示画像の名前はcv_imageとする
+
+			# 5フレームに一回顔認識処理をする
+			if cnt_frame >= 5:
+				#顔検出のためにグレイスケール画像に変換、ヒストグラムの平坦化もかける
+				gray = cv2.cvtColor(small_image,cv2.COLOR_BGR2GRAY)
+				gray = cv2.equalizeHist(gray)
+
+				#　顔検出
+				faces = faceCascade.detectMultiScale(gray, 1.1, 3, 0,(10,10))
+
+                # 検出結果を格納
+ 				pre_faces = faces
+
+				# フレーム枚数をリセット
+				cnt_frame = 0
+
+             # 顔の検出結果が空ならなにもしない。
+			if len(pre_faces) == 0:
+				pass
+			else: # 顔があるなら続けて処理
+				# 検出された顔に枠を描く
+				for (x,y,w,h) in pre_faces:
+					cv2.rectangle(cv_image,(x,y),(x+w,y+h),(0,255,0),2)
+
+				# １個めの顔のx,y,w,h,顔中心cx,cyを得る
+				x = pre_faces[0][0]
+				y = pre_faces[0][1]
+				w = pre_faces[0][2]
+				h = pre_faces[0][3]
+				cx = int(x + w/2)
+				cy = int(y + h/2)
+
+				# 自動制御フラグが１のときだけTelloを動かす
+				if flag == 1:
+					a = b = c = d = 0		# rcコマンドの初期値は０
+
+					# 目標位置との差分にゲインをかける（P制御）
+					dx = 0.4 * (480 - cx)  # 画面中心との差分
+					dy = 0.4 * (360 - cy)  #　画面中心との差分
+					dw = 0.8 * (100 - w)   # 基準顔サイズ100pxとの差分
+
+					dx = -dx #制御方向が逆なため、−１をかける。
+
+					print('dx=%f dy=%f dw=%f'%(dx,dy,dw)) #printして制御量を確認できるようにする
+
+					# 旋回方向の不感帯を設定　機械的な動作を背魚対象としているため、慣性の影響で出力が最終定常地を超えたり
+					# か修正を繰り返したりするから、不感帯を設定している。
+					d = 0.0 if abs(dx) < 20.0 else dx #±20未満ならゼロにする
+					#　旋回方向のソフトウェアリミッタ　±100を超えないように
+					d = 100.0 if d >  100.0 else d
+					d = 100.0 if d < -100.0 else d
+
+					#　前後方向の不感帯を設定
+					b = 0.0 if abs(dw) < 10.0 else dw #±１０未満ならゼロ
+					# 前後方向のソフトウェアリミッタ
+					b =  100 if b >  100.0 else b
+                    b = -100 if b < -100.0 else b
+
+
+                    # 上下方向の不感帯を設定
+                    c = 0.0 if abs(dy) < 30.0 else dy   # ±30未満ならゼロにする
+                    # 上下方向のソフトウェアリミッタ
+                    c =  100 if c >  100.0 else c
+                    c = -100 if c < -100.0 else c
+
+					# rcコマンドを送信
+					drone.send_command('rc %s %s %s %s'%(int(a),int(b),int(c),int(d)))
+
+			#フレームを一枚増やす
+			cnt_frame += 1
+
+
+
 
 			# (X)ウィンドウに表示
 			cv2.imshow('OpenCV Window', small_image)	# ウィンドウに表示するイメージを変えれば色々表示できる
@@ -64,6 +137,11 @@ def main():
 				drone.move_up(0.3)			# 上昇
 			elif key == ord('f'):
 				drone.move_down(0.3)		# 下降
+			elif key == ord('1'):
+				flag = 1                    # フィードバック制御ON
+			elif key == ord('2'):
+				flag = 0　　　　　　　　　　　　# フィードバック制御制御OFF
+				drone.send_command('rc 0 0 0 0')   #　ラジコン司令をゼロに
 
 			# (Z)5秒おきに'command'を送って、死活チェックを通す
 			current_time = time.time()	# 現在時刻を取得
